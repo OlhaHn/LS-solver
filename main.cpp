@@ -70,31 +70,6 @@ public:
         assigned_variables.push(std::make_pair(variable, variable_value));
     }
 
-    int resolve_2_literal_clause(std::vector<int>& clause,
-                                 std::pair<int, int>& head_tail_pair) {
-
-        int head_variable = abs(clause[head_tail_pair.first]);
-        int head_value = variables[head_variable].value;
-
-        int tail_variable = abs(clause[head_tail_pair.second]);
-        int tail_value = variables[tail_variable].value;
-
-        if ( clause_is_satisfied(head_value, clause[head_tail_pair.first]) ||
-             clause_is_satisfied(tail_value, clause[head_tail_pair.second]) ) {
-            return -1;
-        }
-
-        if (head_value < 0) {
-            resolve_unit_clause(clause[head_tail_pair.first], head_variable);
-            return -1;
-        } else if (tail_value < 0) {
-            resolve_unit_clause(clause[head_tail_pair.second], tail_variable);
-            return -1;
-        }
-
-        return -2;
-    }
-
     int clause_is_satisfied_or_new_value_assigned(
             int literal, int index, bool is_head,
             std::pair<int, int>& head_tail_pair, int clause_hash) {
@@ -135,13 +110,8 @@ public:
     int find_new_tail(std::vector<int>& clause,
                       std::pair<int, int>& head_tail_pair,
                       int clause_hash) {
-        auto i=head_tail_pair.first;
-        if (i==head_tail_pair.second-1) { // clause with 2 literals
-            //std::cout << "2 literals\n" << '\n';
-            return resolve_2_literal_clause(clause, head_tail_pair);
-        }
-
-        for(i=head_tail_pair.second; i>head_tail_pair.first; i--) {
+        auto i=head_tail_pair.second;
+        for(; i>head_tail_pair.first; i--) {
             int assign_value = clause_is_satisfied_or_new_value_assigned(clause[i], i, false, head_tail_pair, clause_hash);
             if(assign_value != 0) {
                 return assign_value;
@@ -155,12 +125,7 @@ public:
                       std::pair<int, int>& head_tail_pair,
                       int clause_hash) {
         auto i=head_tail_pair.first;
-        if (i==head_tail_pair.second-1) { // clause with 2 literals
-            return resolve_2_literal_clause(clause, head_tail_pair);
-        }
-
-
-        for(i; i<head_tail_pair.second; i++) {
+        for(; i<head_tail_pair.second; i++) {
             int assign_value = clause_is_satisfied_or_new_value_assigned(clause[i], i, true, head_tail_pair, clause_hash);
             if(assign_value != 0) {
                 return assign_value;
