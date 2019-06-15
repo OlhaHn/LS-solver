@@ -10,6 +10,7 @@
 #include <stack>
 #include <fstream>
 #include "reader.h"
+#include <future>
 
 
 class SATinstance {
@@ -210,9 +211,10 @@ int look_ahead(SATinstance& instance, int& true_size, int& false_size) {
         if(instance.variables[i].value == -1) {
             auto result_of_true_instance = instance;
             auto result_of_false_instance = instance;
-
-            bool true_result = result_of_true_instance.propagation(i, 1);
-            bool false_result = result_of_false_instance.propagation(i, 0);
+            auto res1 = std::async(&SATinstance::propagation, &result_of_true_instance, i, 1);
+            auto res2 = std::async(&SATinstance::propagation, &result_of_false_instance, i, 0);
+            bool true_result = res1.get();
+            bool false_result = res2.get();
 
             double new_heuristic_result = decision_heuristic(instance, result_of_true_instance,
                                                              result_of_false_instance);
