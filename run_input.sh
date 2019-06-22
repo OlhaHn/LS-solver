@@ -4,5 +4,5 @@ for f in $FILES
 do
   echo "$f"
   #sed -i 's/  */ /g' $f
-  ./a.out < $f
+  ./b.out < $f
 done

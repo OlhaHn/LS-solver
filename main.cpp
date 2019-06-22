@@ -20,6 +20,7 @@ public:
     std::unordered_set<int> satisified_clauses;
     std::stack<std::pair<int, int>> assigned_variables;
     std::unordered_set<int> unsigned_varialbes;
+    std::unordered_set<int> reducted_clauses;
     int decision_level;
     static std::unordered_map<int, std::vector<int>> formula;
     SATinstance(std::unordered_set<int> satisified_clauses,
@@ -56,6 +57,10 @@ public:
         return formula[clause][head_tail[clause].first];
     }
 
+    int get_tail(int clause) {
+        return formula[clause][head_tail[clause].second];
+    }
+
     std::pair<int,int> get_head_tail_pair(int clause) {
         return std::make_pair(formula[clause][head_tail[clause].first], formula[clause][head_tail[clause].second]);
     }
@@ -86,6 +91,7 @@ public:
             // assign new head/tail
             is_head ? head_tail_pair.first = index : head_tail_pair.second = index;
             variables[variable].clauses.insert(clause_hash);
+            reducted_clauses.insert(clause_hash);
             // Add to list of that tail, remove from list of current
             return abs(literal);
         }
@@ -96,7 +102,6 @@ public:
         int variable = abs(literal);
         int variable_value = variables[variable].value;
         if (variable_value > -1) { // Variable value was assigned;
-
             if( clause_is_satisfied(variable_value, literal) ) {
                 return -1;
             } else {
@@ -140,11 +145,15 @@ public:
     void prepare_satisfied_clause(int clause) {
         satisified_clauses.insert(clause);
         auto head_tail_pair = get_head_tail_pair(clause);
+        if(reducted_clauses.find(clause) != reducted_clauses.end()) {
+            reducted_clauses.erase(clause);
+        }
         variables[abs(head_tail_pair.first)].clauses.erase(clause);
         variables[abs(head_tail_pair.second)].clauses.erase(clause);
     }
 
     bool propagation(int varaible, int new_value) {
+        reducted_clauses = std::unordered_set<int>();
         assigned_variables = std::stack<std::pair<int, int>>();
         assigned_variables.push(std::make_pair(varaible, new_value));
         while (!assigned_variables.empty())
@@ -182,6 +191,9 @@ public:
     bool is_satisfied() {
         return satisified_clauses.size() == formula.size();
     }
+    int get_clause_size(int hash) {
+        return head_tail[hash].second - head_tail[hash].first + 1;
+    }
 };
 
 
@@ -196,9 +208,46 @@ int find_next_variable(std::unordered_map<int, Variable>& variables) {
     return -1;
 }
 
+double count_heuristic(SATinstance& new_instance) {
+    double coef[] = {1,1,1,0.2,0.05,0.01,0.003, 0};
+    double res = 0;
+    for(auto clause_hash: new_instance.reducted_clauses) {
+        double clause_value = coef[std::min(new_instance.get_clause_size(clause_hash), 7)];
+        res += clause_value;
+    }
+    return res;
+}
+
+double count_WBH(SATinstance& new_instance) {
+    auto variables_weight = std::unordered_map<int, double>();
+    for(auto clause: new_instance.formula) {
+        if(!new_instance.satisified_clauses.count(clause.first)) {
+            for(auto var: clause.second) {
+                if(variables_weight.find(var) == variables_weight.end()) {
+                    variables_weight[var] = 0;
+                }
+                variables_weight[var] += pow(5, new_instance.get_clause_size(clause.first) - 3);
+            }
+        }
+    }
+
+    double result = 0;
+    for(auto clause: new_instance.reducted_clauses) {
+        if(new_instance.get_clause_size(clause)==2) {
+            auto head = new_instance.get_head(clause);
+            auto tail = new_instance.get_tail(clause);
+            result += variables_weight[-1*head] + variables_weight[-1*tail]; 
+        }
+    }
+    return result;
+}
+
+double WBH_heuristic(SATinstance& start_instance, SATinstance& true_instance, SATinstance& false_instance) {
+    return count_WBH(true_instance)*count_WBH(false_instance);
+}
+
 double decision_heuristic(SATinstance& start_instance, SATinstance& true_instance, SATinstance& flase_instance) {
-    return 2*start_instance.unsigned_varialbes.size() - true_instance.unsigned_varialbes.size() -
-           flase_instance.unsigned_varialbes.size();
+    return count_heuristic(true_instance)*count_heuristic(flase_instance);
 }
 
 
@@ -216,7 +265,7 @@ int look_ahead(SATinstance& instance, int& true_size, int& false_size) {
             bool true_result = res1.get();
             bool false_result = res2.get();
 
-            double new_heuristic_result = decision_heuristic(instance, result_of_true_instance,
+            double new_heuristic_result = WBH_heuristic(instance, result_of_true_instance,
                                                              result_of_false_instance);
 
             if (!true_result && !false_result) {
