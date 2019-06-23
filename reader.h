@@ -8,7 +8,7 @@
 #endif //LICENCJAT_READER_H
 
 #ifndef DIFF_HEURISTIC
-#define DIFF_HEURISTIC 3
+#define DIFF_HEURISTIC 0
 
 /*
     Possible values: 
@@ -18,6 +18,18 @@
         3 "bsrh" - backbone search renormalized heuristic
 */
 
+#endif
+
+#ifndef DECISION_HEURISTIC
+#define DECISION_HEURISTIC 2
+
+/*
+    Possible values: 
+        0 "kcnfs" - selects 1 if x appears more often then -x, 
+        1 "march" - selects 1 if diff(x=1) < diff(x=2)
+        2 "posit" - selects 0 if x appears more often then -x, 
+        3 "satz" - always select 1 first
+*/
 #endif
 
 std::unordered_map<int, long double> powers = std::unordered_map<int, long double>();
@@ -40,12 +52,16 @@ std::ostream & operator << (std::ostream &out, const Variable &c) {
 }
 
 void prepare_variables(int number, std::unordered_map<int, Variable>& variables,
-                       std::unordered_set<int>& unsigned_variables, std::unordered_map<int, long double>& weights) {
+                       std::unordered_set<int>& unsigned_variables, 
+                       std::unordered_map<int, long double>& weights,
+                       std::unordered_map<int, int>& variable_count) {
     for(int i=1; i<=number; i++) {
         Variable var{-1, -1, {}};
         variables[i] = var;
         weights[i] = 0.0;
         weights[-1*i] = 0.0;
+        variable_count[i] = 0;
+        variable_count[-1*i] = 0;
         unsigned_variables.insert(i);
     }
 }
@@ -61,7 +77,8 @@ void read_input(std::unordered_map<int, std::vector<int>>& formula,
                 std::unordered_map<int, Variable>& variables,
                 std::unordered_map<int, std::pair<int, int>>& head_tail,
                 std::unordered_set<int>& unsigned_variables,
-                std::unordered_map<int, long double>& weights) {
+                std::unordered_map<int, long double>& weights,
+                std::unordered_map<int, int>& variable_count) {
     std::string line;
     for (line; std::getline(std::cin, line);) {
         if (line[0] == 'p') {
@@ -75,7 +92,7 @@ void read_input(std::unordered_map<int, std::vector<int>>& formula,
     int variables_number = std::stoi(*(info.end() - 2));
     int clauses_number = std::stoi(*(info.end() - 1));
 
-    prepare_variables(variables_number, variables, unsigned_variables, weights);
+    prepare_variables(variables_number, variables, unsigned_variables, weights, variable_count);
     int max_clause_size = 0;
     for(int i=0; i<clauses_number; i++) {
         std::string input;
@@ -89,6 +106,7 @@ void read_input(std::unordered_map<int, std::vector<int>>& formula,
         int clause_size = 1;
         while(n) {
             clause.push_back(n);
+            variable_count[n] += 1;
             stream >> n;
             clause_size++;
         }
