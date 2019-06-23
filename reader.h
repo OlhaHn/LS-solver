@@ -7,7 +7,20 @@
 
 #endif //LICENCJAT_READER_H
 
-std::unordered_map<int, long double> powers_for_wbh = std::unordered_map<int, long double>();
+#ifndef DIFF_HEURISTIC
+#define DIFF_HEURISTIC 3
+
+/*
+    Possible values: 
+        0 "crh" - clause reduction heuristic, 
+        1 "wbh" - weighted binaries heuristic,
+        2 "bsh" - backbone search heuristic,
+        3 "bsrh" - backbone search renormalized heuristic
+*/
+
+#endif
+
+std::unordered_map<int, long double> powers = std::unordered_map<int, long double>();
 
 struct Variable
 {
@@ -88,19 +101,32 @@ void read_input(std::unordered_map<int, std::vector<int>>& formula,
         variables[abs(clause[0])].clauses.insert(i);
         variables[abs(*(clause.end()-1))].clauses.insert(i);
     }
-    long double current_pow_value = 125.0;
-    for(int i=0; i<=max_clause_size; i++) {
-        powers_for_wbh[i] = current_pow_value;
-        current_pow_value /= 5.0;
-    }
+    #if DIFF_HEURISTIC != 0
+        #if DIFF_HEURISTIC == 1
+            long double current_pow_value_wbh = 125.0;
+            for(int i=0; i<=max_clause_size; i++) {
+                powers[i] = current_pow_value_wbh;
+                current_pow_value_wbh /= 5.0;       
+            }
 
-    for(auto clause_pair: formula) {
-        auto clause = clause_pair.second;
-        int size = clause.size();
-        auto pow_value = powers_for_wbh[size];
-        for(auto var: clause) {
-            weights[var] += pow_value;
+        #elif DIFF_HEURISTIC >= 2
+            long double current_pow_value_bsh = 8.0;
+            for(int i=0; i<=max_clause_size; i++) {
+                powers[i] = current_pow_value_bsh;
+                current_pow_value_bsh /= 2.0;          
+            }
+        #endif
+        
+        
+        for(auto clause_pair: formula) {
+            auto clause = clause_pair.second;
+            int size = clause.size();
+
+            auto pow_value = powers[size];
+            for(auto var: clause) {
+                weights[var] += pow_value;
+            }
         }
-    }
+    #endif
 
 }

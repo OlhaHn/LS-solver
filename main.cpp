@@ -223,38 +223,7 @@ double count_heuristic(SATinstance& new_instance) {
     return res;
 }
 
-
-
-double count_WBH(SATinstance& new_instance) {
-    auto variables_weight = std::unordered_map<int, long double>();
-    for(auto clause: new_instance.formula) {
-        if(!new_instance.satisified_clauses.count(clause.first)) {
-            for(auto var: clause.second) {
-                if(variables_weight.find(var) == variables_weight.end()) {
-                    variables_weight[var] = 0;
-                }
-                int new_power = new_instance.get_clause_size(clause.first) - 3;
-
-                if(powers_for_wbh.find(new_power) == powers_for_wbh.end()) {
-                    powers_for_wbh[new_power] = pow(5.0, new_power);
-                }
-                variables_weight[var] += powers_for_wbh[new_power];
-            }
-        }   
-    }
-
-    double result = 0;
-    for(auto clause: new_instance.reducted_clauses) {
-        if(new_instance.get_clause_size(clause)==2) {
-            auto head = new_instance.get_head(clause);
-            auto tail = new_instance.get_tail(clause);
-            result += variables_weight[-1*head] + variables_weight[-1*tail]; 
-        }
-    }
-    return result;
-}
-
-long double get_WBH_count(SATinstance& start_instance, SATinstance& new_instance) {
+long double get_WBH_or_BSH_count(SATinstance& start_instance, SATinstance& new_instance) {
     auto new_satisfied_clauses = std::unordered_set<int>();
     std::set_difference(new_instance.satisified_clauses.begin(), new_instance.satisified_clauses.end(),
         start_instance.satisified_clauses.begin(), start_instance.satisified_clauses.end(), 
@@ -262,7 +231,7 @@ long double get_WBH_count(SATinstance& start_instance, SATinstance& new_instance
     for(auto clause_hash: new_satisfied_clauses) {
         auto size = start_instance.get_clause_size(clause_hash);
         for(auto var: new_instance.formula[clause_hash]) {
-            new_instance.weights[var] -= powers_for_wbh[size-3];
+            new_instance.weights[var] -= powers[size-3];
         }
     }
 
@@ -271,24 +240,44 @@ long double get_WBH_count(SATinstance& start_instance, SATinstance& new_instance
         int old_size = start_instance.get_clause_size(clause_hash);
 
         for(auto var: new_instance.formula[clause_hash]) {
-            new_instance.weights[var] = new_instance.weights[var] - powers_for_wbh[old_size-3] + powers_for_wbh[new_size-3];
+            new_instance.weights[var] = new_instance.weights[var] - powers[old_size-3] + powers[new_size-3];
         }
     }
-
     long double result = 0;
-    for(auto clause: new_instance.reducted_clauses) {
-        if(new_instance.get_clause_size(clause)==2) {
-            auto head = new_instance.get_head(clause);
-            auto tail = new_instance.get_tail(clause);
-            result += new_instance.weights[-1*head] + new_instance.weights[-1*tail]; 
+    
+    #if DIFF_HEURISTIC == 3 
+        // For backbone search normalized heuristic
+        long double bsrh_coeff = 0.0;
+        int total_size = 0;
+        for(auto clause_hash: new_instance.reducted_clauses) {
+            total_size += new_instance.get_clause_size(clause_hash);
+            for(auto var: new_instance.formula[clause_hash]) {
+                bsrh_coeff += new_instance.weights[-1*var];
+            }
         }
-    }
+        bsrh_coeff /= total_size;
+
+        for(auto clause_hash: new_instance.reducted_clauses) {
+            long double clause_result = powers[new_instance.get_clause_size(clause_hash) - 3];
+            for(auto var: new_instance.formula[clause_hash]) {
+                clause_result = clause_result * new_instance.weights[-1*var] / bsrh_coeff;
+            }
+        }
+
+    #else 
+        for(auto clause: new_instance.reducted_clauses) {
+            if(new_instance.get_clause_size(clause)==2) {
+                auto head = new_instance.get_head(clause);
+                auto tail = new_instance.get_tail(clause);
+                result += new_instance.weights[-1*head] + new_instance.weights[-1*tail]; 
+            }
+        }
+    #endif
     return result;
 }
 
-double WBH_heuristic(SATinstance& start_instance, SATinstance& true_instance, SATinstance& false_instance) {
-    //return count_WBH(true_instance)*count_WBH(false_instance);
-    return get_WBH_count(start_instance, true_instance)*get_WBH_count(start_instance, false_instance);
+double WBH_or_BSH_heuristic(SATinstance& start_instance, SATinstance& true_instance, SATinstance& false_instance) {
+    return get_WBH_or_BSH_count(start_instance, true_instance)*get_WBH_or_BSH_count(start_instance, false_instance);
 }
 
 double decision_heuristic(SATinstance& start_instance, SATinstance& true_instance, SATinstance& flase_instance) {
@@ -310,7 +299,7 @@ int look_ahead(SATinstance& instance, int& true_size, int& false_size) {
             bool true_result = res1.get();
             bool false_result = res2.get();
 
-            double new_heuristic_result = decision_heuristic(instance, result_of_true_instance,
+            double new_heuristic_result = WBH_or_BSH_heuristic(instance, result_of_true_instance,
                                                              result_of_false_instance);
 
             if (!true_result && !false_result) {
