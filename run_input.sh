@@ -1,5 +1,5 @@
 #!/bin/bash
-FILES=./input/s_SW100-8-5/*
+FILES=./input/us_uuf50-218/*
 for f in $FILES
 do
   echo "$f"

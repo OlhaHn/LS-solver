@@ -214,7 +214,7 @@ int find_next_variable(std::unordered_map<int, Variable>& variables) {
 }
 
 double count_heuristic(SATinstance& new_instance) {
-    double coef[] = {1,1,1,0.2,0.05,0.01,0.003, 0};
+    double coef[] = {1,1,1,0.2,0.05,0.01,0.003,0};
     double res = 0;
     for(auto clause_hash: new_instance.reducted_clauses) {
         double clause_value = coef[std::min(new_instance.get_clause_size(clause_hash), 7)];
@@ -255,6 +255,17 @@ double count_WBH(SATinstance& new_instance) {
 }
 
 long double get_WBH_count(SATinstance& start_instance, SATinstance& new_instance) {
+    auto new_satisfied_clauses = std::unordered_set<int>();
+    std::set_difference(new_instance.satisified_clauses.begin(), new_instance.satisified_clauses.end(),
+        start_instance.satisified_clauses.begin(), start_instance.satisified_clauses.end(), 
+        std::inserter(new_satisfied_clauses, new_satisfied_clauses.begin()));
+    for(auto clause_hash: new_satisfied_clauses) {
+        auto size = start_instance.get_clause_size(clause_hash);
+        for(auto var: new_instance.formula[clause_hash]) {
+            new_instance.weights[var] -= powers_for_wbh[size-3];
+        }
+    }
+
     for(auto clause_hash: new_instance.reducted_clauses) {
         int new_size = new_instance.get_clause_size(clause_hash);
         int old_size = start_instance.get_clause_size(clause_hash);
