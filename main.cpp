@@ -13,6 +13,7 @@
 #include <future>
 
 
+
 class SATinstance {
 public:
     std::unordered_map<int, std::pair<int, int>> head_tail;
@@ -21,12 +22,14 @@ public:
     std::stack<std::pair<int, int>> assigned_variables;
     std::unordered_set<int> unsigned_varialbes;
     std::unordered_set<int> reducted_clauses;
+    std::unordered_map<int, long double> weights;
     int decision_level;
     static std::unordered_map<int, std::vector<int>> formula;
     SATinstance(std::unordered_set<int> satisified_clauses,
+                std::unordered_map<int, long double> weights,
                 std::unordered_map<int, std::pair<int, int>> head_tail,
                 std::unordered_set<int> unsigned_varialbes,
-                std::unordered_map<int, Variable> variables, int decision_level) : satisified_clauses(satisified_clauses),
+                std::unordered_map<int, Variable> variables, int decision_level) : weights(weights), satisified_clauses(satisified_clauses),
                                                                                    head_tail(head_tail), variables(variables), decision_level(decision_level), unsigned_varialbes(unsigned_varialbes) {}
 
     // Copy constructor
@@ -36,6 +39,7 @@ public:
         satisified_clauses = p2.satisified_clauses;
         decision_level = p2.decision_level;
         unsigned_varialbes = p2.unsigned_varialbes;
+        weights = p2.weights;
     }
 
     // Copy assignment operator
@@ -46,6 +50,7 @@ public:
         satisified_clauses = p2.satisified_clauses;
         decision_level = p2.decision_level;
         unsigned_varialbes = p2.unsigned_varialbes;
+        weights = p2.weights;
         return *this;
     }
 
@@ -218,17 +223,24 @@ double count_heuristic(SATinstance& new_instance) {
     return res;
 }
 
+
+
 double count_WBH(SATinstance& new_instance) {
-    auto variables_weight = std::unordered_map<int, double>();
+    auto variables_weight = std::unordered_map<int, long double>();
     for(auto clause: new_instance.formula) {
         if(!new_instance.satisified_clauses.count(clause.first)) {
             for(auto var: clause.second) {
                 if(variables_weight.find(var) == variables_weight.end()) {
                     variables_weight[var] = 0;
                 }
-                variables_weight[var] += pow(5, new_instance.get_clause_size(clause.first) - 3);
+                int new_power = new_instance.get_clause_size(clause.first) - 3;
+
+                if(powers_for_wbh.find(new_power) == powers_for_wbh.end()) {
+                    powers_for_wbh[new_power] = pow(5.0, new_power);
+                }
+                variables_weight[var] += powers_for_wbh[new_power];
             }
-        }
+        }   
     }
 
     double result = 0;
@@ -242,8 +254,30 @@ double count_WBH(SATinstance& new_instance) {
     return result;
 }
 
+long double get_WBH_count(SATinstance& start_instance, SATinstance& new_instance) {
+    for(auto clause_hash: new_instance.reducted_clauses) {
+        int new_size = new_instance.get_clause_size(clause_hash);
+        int old_size = start_instance.get_clause_size(clause_hash);
+
+        for(auto var: new_instance.formula[clause_hash]) {
+            new_instance.weights[var] = new_instance.weights[var] - powers_for_wbh[old_size-3] + powers_for_wbh[new_size-3];
+        }
+    }
+
+    long double result = 0;
+    for(auto clause: new_instance.reducted_clauses) {
+        if(new_instance.get_clause_size(clause)==2) {
+            auto head = new_instance.get_head(clause);
+            auto tail = new_instance.get_tail(clause);
+            result += new_instance.weights[-1*head] + new_instance.weights[-1*tail]; 
+        }
+    }
+    return result;
+}
+
 double WBH_heuristic(SATinstance& start_instance, SATinstance& true_instance, SATinstance& false_instance) {
-    return count_WBH(true_instance)*count_WBH(false_instance);
+    //return count_WBH(true_instance)*count_WBH(false_instance);
+    return get_WBH_count(start_instance, true_instance)*get_WBH_count(start_instance, false_instance);
 }
 
 double decision_heuristic(SATinstance& start_instance, SATinstance& true_instance, SATinstance& flase_instance) {
@@ -265,7 +299,7 @@ int look_ahead(SATinstance& instance, int& true_size, int& false_size) {
             bool true_result = res1.get();
             bool false_result = res2.get();
 
-            double new_heuristic_result = WBH_heuristic(instance, result_of_true_instance,
+            double new_heuristic_result = decision_heuristic(instance, result_of_true_instance,
                                                              result_of_false_instance);
 
             if (!true_result && !false_result) {
@@ -282,6 +316,9 @@ int look_ahead(SATinstance& instance, int& true_size, int& false_size) {
                 selected_var = i;
             }
         }
+    }
+    if(instance.variables[selected_var].value != -1) {
+        return -1;
     }
     //std::cout << "Sizes: " << true_size << " " << false_size << "\n";
     return selected_var;
@@ -331,10 +368,11 @@ int main() {
     // Name of variable, variable.
     auto variables = std::unordered_map<int, Variable>();
     auto unasigned_variables = std::unordered_set<int>();
-    read_input(formula, variables, head_tail, unasigned_variables);
+    auto weights = std::unordered_map<int, long double>();
+    read_input(formula, variables, head_tail, unasigned_variables, weights);
 
     SATinstance::formula = formula;
-    SATinstance problem = SATinstance(satisified_clauses, head_tail, unasigned_variables, variables, 0);
+    SATinstance problem = SATinstance(satisified_clauses, weights, head_tail, unasigned_variables, variables, 0);
 
     auto res = dpll(problem);
     std::cout << "Result: " << res << '\n';

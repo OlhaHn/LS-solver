@@ -1,8 +1,8 @@
 #!/bin/bash
-FILES=./input/us_pigeon-hole/*
+FILES=./input/s_SW100-8-5/*
 for f in $FILES
 do
   echo "$f"
   #sed -i 's/  */ /g' $f
-  ./b.out < $f
+  ./a.out < $f
 done
