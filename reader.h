@@ -32,6 +32,16 @@
 */
 #endif
 
+#ifndef PRESELECT_HEURISTIC
+#define PRESELECT_HEURISTIC 0
+
+/*
+    Possible values: 
+        0 propz
+        1 clause reduction approximation
+*/
+#endif
+
 std::unordered_map<int, long double> powers = std::unordered_map<int, long double>();
 
 struct Variable

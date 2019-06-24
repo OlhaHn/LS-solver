@@ -58,7 +58,33 @@ public:
         return *this;
     }
 
-    std::unordered_set<int> preselect() {
+    std::unordered_set<int> preselect_propz() {
+        if(decision_level < 5 || unsigned_varialbes.size() <= 10) {
+            return unsigned_varialbes;
+        }
+
+        auto appears_positive = std::unordered_set<int>();
+        auto appears_negative = std::unordered_set<int>();
+        for(auto var: unsigned_varialbes) {
+            for(auto clause_hash: variables[var].clauses) {
+                auto clause = formula[clause_hash];
+                if(clause.size() == 2) {
+                    clause[0] < 0 ? appears_negative.insert(abs(clause[0])) : appears_positive.insert(abs(clause[0]));
+                    clause[1] < 0 ? appears_negative.insert(abs(clause[1])) : appears_positive.insert(abs(clause[1]));
+                }
+            }
+        }
+        auto result_set = std::unordered_set<int>();
+        std::set_intersection (appears_positive.begin(), appears_positive.end(), appears_negative.begin(), appears_negative.end(), std::inserter(result_set, result_set.begin()));
+        auto it = unsigned_varialbes.begin();
+        while(result_set.size() < 10 && it != unsigned_varialbes.end()) {
+            result_set.insert(*it);
+            it++;
+        }
+        return result_set;
+    }
+
+    std::unordered_set<int> preselect_cra() {
         auto occurence_number = std::unordered_map<int, int>();
         auto binary_clause_neighbours = std::unordered_map<int, std::vector<int>>();
         auto cra_map = std::unordered_map<int, int>();
@@ -360,7 +386,11 @@ double decision_heuristic(SATinstance& start_instance, SATinstance& true_instanc
 
 
 int look_ahead(SATinstance& instance, double& true_size, double& false_size) {
-    auto preselect = instance.preselect();
+    #if PRESELECT_HEURISTIC == 0
+    auto preselect = instance.preselect_propz();
+    #else
+    auto preselect = instance.preselect_cra();
+    #endif
     double decision_heuristic_result = -100;
     int selected_var = -1;
 
