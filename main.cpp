@@ -59,7 +59,66 @@ public:
     }
 
     std::unordered_set<int> preselect() {
-        return unsigned_varialbes;
+        auto occurence_number = std::unordered_map<int, int>();
+        auto binary_clause_neighbours = std::unordered_map<int, std::vector<int>>();
+        auto cra_map = std::unordered_map<int, int>();
+        // iterate throught all not satisfied caluses (they should be in unsigned variables clauses list)
+        // prepare binary clause neighbours, occurence number
+        int unsigned_varialbes_count = unsigned_varialbes.size();
+        for(auto var: unsigned_varialbes) {
+            cra_map[var] = 0;
+            for(auto clause_hash: variables[var].clauses) {
+                if(abs(get_head(clause_hash)) == var) {
+                    auto clause = formula[clause_hash];
+                    if(clause.size() == 2) {
+                        for(auto literal: clause) {
+                            if(binary_clause_neighbours.find(literal) == binary_clause_neighbours.end()) {
+                                binary_clause_neighbours[literal] = std::vector<int>();
+                            }
+                        }
+                        binary_clause_neighbours[clause[0]].push_back(clause[1]);
+                        binary_clause_neighbours[clause[1]].push_back(clause[0]);
+                    } else {
+                        for(auto literal: clause) {
+                            if(occurence_number.find(literal) == occurence_number.end()) {
+                                occurence_number[literal] = 0;
+                            }
+                            occurence_number[literal] += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        if(unsigned_varialbes_count > 20) {
+            for(auto var: unsigned_varialbes) {
+                int first_sum = 0;
+                int second_sum = 0;
+                for(auto negihbour: binary_clause_neighbours[var]) {
+                    first_sum += occurence_number[-1*negihbour];
+                }
+                for(auto negihbour: binary_clause_neighbours[-1*var]) {
+                    second_sum += occurence_number[-1*negihbour];
+                }
+                cra_map[var] = first_sum*second_sum;
+            }
+        }
+
+        auto size = std::max(20, unsigned_varialbes_count/10);
+        std::vector<std::pair<int, int>> top(size);
+        auto result_set = std::unordered_set<int>();
+        std::partial_sort_copy(cra_map.begin(),
+                            cra_map.end(),
+                            top.begin(),
+                            top.end(),
+                            [](std::pair<int, int> const& l,
+                                std::pair<int, int> const& r)
+                            {
+                                return l.second > r.second;
+                            });
+        std::transform(top.begin(), top.end(), std::inserter(result_set, result_set.begin()),
+                   [](std::pair<int, int> c) { return c.first; });
+        return result_set;
     }
 
     int get_head(int clause) {
@@ -173,8 +232,8 @@ public:
         while (!assigned_variables.empty())
         {
             std::pair<int, int> var = assigned_variables.top();
-            unsigned_varialbes.erase(var.first);
             assigned_variables.pop();
+            unsigned_varialbes.erase(var.first);
             //std::cout << "Working with: " << var.first << " " << var.second << '\n';
             variables[var.first].value = var.second;
             variables[var.first].assigned_level = decision_level;
@@ -304,6 +363,8 @@ int look_ahead(SATinstance& instance, double& true_size, double& false_size) {
     auto preselect = instance.preselect();
     double decision_heuristic_result = -100;
     int selected_var = -1;
+
+    double new_true_size, new_false_size;
     for(auto i: preselect) {
         if(instance.variables[i].value == -1) {
             auto result_of_true_instance = instance;
@@ -315,10 +376,10 @@ int look_ahead(SATinstance& instance, double& true_size, double& false_size) {
 
             #if DIFF_HEURISTIC != 0
             double new_heuristic_result = WBH_or_BSH_heuristic(instance, result_of_true_instance,
-                                                             result_of_false_instance, true_size, false_size);
+                                                             result_of_false_instance, new_true_size, new_false_size);
             #else 
             double new_heuristic_result = decision_heuristic(instance, result_of_true_instance,
-                                                             result_of_false_instance, true_size, false_size);
+                                                             result_of_false_instance, new_true_size, new_false_size);
             #endif
 
             if (!true_result && !false_result) {
@@ -328,8 +389,8 @@ int look_ahead(SATinstance& instance, double& true_size, double& false_size) {
             } else if (!false_result) {
                 instance = result_of_true_instance;
             } else if (decision_heuristic_result < new_heuristic_result) {
-                true_size =  result_of_true_instance.unsigned_varialbes.size();
-                false_size = result_of_false_instance.unsigned_varialbes.size();
+                true_size =  new_true_size;
+                false_size = new_false_size;
                 decision_heuristic_result = new_heuristic_result;
                 selected_var = i;
             }
