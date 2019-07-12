@@ -19,6 +19,16 @@ int look_ahead(SATinstance& instance, double& true_size, double& false_size) {
     double new_true_size, new_false_size;
     for(auto i: preselect) {
         if(instance.variables[i].value == -1) {
+            #if AUTARKY_REASONING != 0
+                if(instance.variable_count[i] == 0) { // positive literal does not appear
+                    instance.propagation(i, 0);
+                    continue;
+                } else if(instance.variable_count[-1*i] == 0) { // negative literal does not apper
+                    instance.propagation(i, 1);
+                    continue;
+                }
+            #endif
+
             auto result_of_true_instance = instance;
             auto result_of_false_instance = instance;
             auto res1 = std::async(&SATinstance::propagation, &result_of_true_instance, i, 1);
@@ -26,25 +36,27 @@ int look_ahead(SATinstance& instance, double& true_size, double& false_size) {
             bool true_result = res1.get();
             bool false_result = res2.get();
 
-            #if DIFF_HEURISTIC != 0
-            double new_heuristic_result = WBH_or_BSH_heuristic(instance, result_of_true_instance,
-                                                             result_of_false_instance, new_true_size, new_false_size);
-            #else 
-            double new_heuristic_result = count_heuristic(instance, result_of_true_instance,
-                                                             result_of_false_instance, new_true_size, new_false_size);
-            #endif
-
             if (!true_result && !false_result) {
                 return 0;
             } else if (!true_result) {
                 instance = result_of_false_instance;
             } else if (!false_result) {
                 instance = result_of_true_instance;
-            } else if (decision_heuristic_result < new_heuristic_result) {
-                true_size =  new_true_size;
-                false_size = new_false_size;
-                decision_heuristic_result = new_heuristic_result;
-                selected_var = i;
+            } else {
+                #if DIFF_HEURISTIC != 0
+                double new_heuristic_result = WBH_or_BSH_heuristic(instance, result_of_true_instance,
+                                                                result_of_false_instance, new_true_size, new_false_size);
+                #else 
+                double new_heuristic_result = count_heuristic(instance, result_of_true_instance,
+                                                                result_of_false_instance, new_true_size, new_false_size);
+                #endif
+
+                if (decision_heuristic_result < new_heuristic_result) {
+                    true_size =  new_true_size;
+                    false_size = new_false_size;
+                    decision_heuristic_result = new_heuristic_result;
+                    selected_var = i;
+                }
             }
         }
     }

@@ -37,3 +37,14 @@
         1 clause reduction approximation
 */
 #endif // PRESELECT_HEURISTIC
+
+#ifndef AUTARKY_REASONING
+#define AUTARKY_REASONING 1
+
+/*
+    Possible values: 
+        0 don't use autarky_reasoning
+        1 use autarky_reasoning
+*/
+
+#endif
