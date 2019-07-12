@@ -1,388 +1,10 @@
-#include <iostream>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
-#include <string>
-#include <sstream>
-#include <iterator>
-#include <list>
-#include <algorithm>
-#include <stack>
-#include <fstream>
+#include "includes.h"
+#include "settings.h"
+#include "variable.h"
+#include "helper_structures.h"
 #include "reader.h"
-#include <future>
-
-
-
-class SATinstance {
-public:
-    std::unordered_map<int, std::pair<int, int>> head_tail;
-    std::unordered_map<int, Variable> variables;
-    std::unordered_set<int> satisified_clauses;
-    std::stack<std::pair<int, int>> assigned_variables;
-    std::unordered_set<int> unsigned_varialbes;
-    std::unordered_set<int> reducted_clauses;
-    std::unordered_map<int, long double> weights;
-    std::unordered_map<int, int> variable_count;
-    int decision_level;
-    static std::unordered_map<int, std::vector<int>> formula;
-    SATinstance(std::unordered_set<int> satisified_clauses,
-                std::unordered_map<int, long double> weights,
-                std::unordered_map<int, int> variable_count,
-                std::unordered_map<int, std::pair<int, int>> head_tail,
-                std::unordered_set<int> unsigned_varialbes,
-                std::unordered_map<int, Variable> variables, int decision_level) : variable_count(variable_count), weights(weights), satisified_clauses(satisified_clauses),
-                                                                                   head_tail(head_tail), variables(variables), decision_level(decision_level), unsigned_varialbes(unsigned_varialbes) {}
-
-    // Copy constructor
-    SATinstance(const SATinstance &p2) {
-        head_tail = p2.head_tail;
-        variables = p2.variables;
-        satisified_clauses = p2.satisified_clauses;
-        decision_level = p2.decision_level;
-        unsigned_varialbes = p2.unsigned_varialbes;
-        weights = p2.weights;
-        variable_count = p2.variable_count;
-    }
-
-    // Copy assignment operator
-    SATinstance& operator=(SATinstance p2)
-    {
-        head_tail = p2.head_tail;
-        variables = p2.variables;
-        satisified_clauses = p2.satisified_clauses;
-        decision_level = p2.decision_level;
-        unsigned_varialbes = p2.unsigned_varialbes;
-        weights = p2.weights;
-        variable_count = p2.variable_count;
-        return *this;
-    }
-
-    std::unordered_set<int> preselect_propz() {
-        if(decision_level < 5 || unsigned_varialbes.size() <= 10) {
-            return unsigned_varialbes;
-        }
-
-        auto appears_positive = std::unordered_set<int>();
-        auto appears_negative = std::unordered_set<int>();
-        for(auto var: unsigned_varialbes) {
-            for(auto clause_hash: variables[var].clauses) {
-                auto clause = formula[clause_hash];
-                if(clause.size() == 2) {
-                    clause[0] < 0 ? appears_negative.insert(abs(clause[0])) : appears_positive.insert(abs(clause[0]));
-                    clause[1] < 0 ? appears_negative.insert(abs(clause[1])) : appears_positive.insert(abs(clause[1]));
-                }
-            }
-        }
-        auto result_set = std::unordered_set<int>();
-        std::set_intersection (appears_positive.begin(), appears_positive.end(), appears_negative.begin(), appears_negative.end(), std::inserter(result_set, result_set.begin()));
-        auto it = unsigned_varialbes.begin();
-        while(result_set.size() < 10 && it != unsigned_varialbes.end()) {
-            result_set.insert(*it);
-            it++;
-        }
-        return result_set;
-    }
-
-    std::unordered_set<int> preselect_cra() {
-        auto occurence_number = std::unordered_map<int, int>();
-        auto binary_clause_neighbours = std::unordered_map<int, std::vector<int>>();
-        auto cra_map = std::unordered_map<int, int>();
-        // iterate throught all not satisfied caluses (they should be in unsigned variables clauses list)
-        // prepare binary clause neighbours, occurence number
-        int unsigned_varialbes_count = unsigned_varialbes.size();
-        for(auto var: unsigned_varialbes) {
-            cra_map[var] = 0;
-            for(auto clause_hash: variables[var].clauses) {
-                if(abs(get_head(clause_hash)) == var) {
-                    auto clause = formula[clause_hash];
-                    if(clause.size() == 2) {
-                        for(auto literal: clause) {
-                            if(binary_clause_neighbours.find(literal) == binary_clause_neighbours.end()) {
-                                binary_clause_neighbours[literal] = std::vector<int>();
-                            }
-                        }
-                        binary_clause_neighbours[clause[0]].push_back(clause[1]);
-                        binary_clause_neighbours[clause[1]].push_back(clause[0]);
-                    } else {
-                        for(auto literal: clause) {
-                            if(occurence_number.find(literal) == occurence_number.end()) {
-                                occurence_number[literal] = 0;
-                            }
-                            occurence_number[literal] += 1;
-                        }
-                    }
-                }
-            }
-        }
-
-        if(unsigned_varialbes_count > 20) {
-            for(auto var: unsigned_varialbes) {
-                int first_sum = 0;
-                int second_sum = 0;
-                for(auto negihbour: binary_clause_neighbours[var]) {
-                    first_sum += occurence_number[-1*negihbour];
-                }
-                for(auto negihbour: binary_clause_neighbours[-1*var]) {
-                    second_sum += occurence_number[-1*negihbour];
-                }
-                cra_map[var] = first_sum*second_sum;
-            }
-        }
-
-        auto size = std::max(20, unsigned_varialbes_count/10);
-        std::vector<std::pair<int, int>> top(size);
-        auto result_set = std::unordered_set<int>();
-        std::partial_sort_copy(cra_map.begin(),
-                            cra_map.end(),
-                            top.begin(),
-                            top.end(),
-                            [](std::pair<int, int> const& l,
-                                std::pair<int, int> const& r)
-                            {
-                                return l.second > r.second;
-                            });
-        std::transform(top.begin(), top.end(), std::inserter(result_set, result_set.begin()),
-                   [](std::pair<int, int> c) { return c.first; });
-        return result_set;
-    }
-
-    int get_head(int clause) {
-        return formula[clause][head_tail[clause].first];
-    }
-
-    int get_tail(int clause) {
-        return formula[clause][head_tail[clause].second];
-    }
-
-    std::pair<int,int> get_head_tail_pair(int clause) {
-        return std::make_pair(formula[clause][head_tail[clause].first], formula[clause][head_tail[clause].second]);
-    }
-
-    bool clause_is_satisfied(int variable_value, int literal) {
-        return (variable_value == 1 && literal > 0) || (variable_value == 0 && literal < 0);
-    }
-
-    void resolve_unit_clause(int literal, int variable) {
-        int variable_value;
-        literal < 0 ? variable_value = 0 : variable_value = 1;
-        variables[variable].value = variable_value;
-        assigned_variables.push(std::make_pair(variable, variable_value));
-    }
-
-    int clause_is_satisfied_or_new_value_assigned(
-            int literal, int index, bool is_head,
-            std::pair<int, int>& head_tail_pair, int clause_hash) {
-
-        int variable = abs(literal);
-        int variable_value = variables[variable].value;
-        if (variable_value > -1) { // Variable value was assigned;
-            if( clause_is_satisfied(variable_value, literal) ) {
-                return -1;
-            }
-        }
-        else {
-            // assign new head/tail
-            is_head ? head_tail_pair.first = index : head_tail_pair.second = index;
-            variables[variable].clauses.insert(clause_hash);
-            reducted_clauses.insert(clause_hash);
-            // Add to list of that tail, remove from list of current
-            return abs(literal);
-        }
-        return 0;
-    }
-
-    int resolve_last_literal(int literal) {
-        int variable = abs(literal);
-        int variable_value = variables[variable].value;
-        if (variable_value > -1) { // Variable value was assigned;
-            if( clause_is_satisfied(variable_value, literal) ) {
-                return -1;
-            } else {
-                return -2;
-            }
-        }
-
-        resolve_unit_clause(literal, variable);
-        return -1;
-    }
-
-    int find_new_tail(std::vector<int>& clause,
-                      std::pair<int, int>& head_tail_pair,
-                      int clause_hash) {
-        auto i=head_tail_pair.second;
-        for(; i>head_tail_pair.first; i--) {
-            int assign_value = clause_is_satisfied_or_new_value_assigned(clause[i], i, false, head_tail_pair, clause_hash);
-            if(assign_value != 0) {
-                return assign_value;
-            }
-        }
-
-        return resolve_last_literal(clause[i]);
-    }
-
-    int find_new_head(std::vector<int>& clause,
-                      std::pair<int, int>& head_tail_pair,
-                      int clause_hash) {
-        auto i=head_tail_pair.first;
-        for(; i<head_tail_pair.second; i++) {
-            int assign_value = clause_is_satisfied_or_new_value_assigned(clause[i], i, true, head_tail_pair, clause_hash);
-            if(assign_value != 0) {
-                return assign_value;
-            }
-        }
-
-        return resolve_last_literal(clause[i]);
-
-    }
-
-    void prepare_satisfied_clause(int clause) {
-        satisified_clauses.insert(clause);
-        auto head_tail_pair = get_head_tail_pair(clause);
-        if(reducted_clauses.find(clause) != reducted_clauses.end()) {
-            reducted_clauses.erase(clause);
-        }
-        variables[abs(head_tail_pair.first)].clauses.erase(clause);
-        variables[abs(head_tail_pair.second)].clauses.erase(clause);
-        #if DECISION_HEURISTIC == 0 || DECISION_HEURISTIC == 2
-            for(auto var: formula[clause]) {
-                variable_count[var] -= 1;
-            }
-        #endif
-    }
-
-    bool propagation(int varaible, int new_value) {
-        reducted_clauses = std::unordered_set<int>();
-        assigned_variables = std::stack<std::pair<int, int>>();
-        assigned_variables.push(std::make_pair(varaible, new_value));
-        while (!assigned_variables.empty())
-        {
-            std::pair<int, int> var = assigned_variables.top();
-            assigned_variables.pop();
-            unsigned_varialbes.erase(var.first);
-            //std::cout << "Working with: " << var.first << " " << var.second << '\n';
-            variables[var.first].value = var.second;
-            variables[var.first].assigned_level = decision_level;
-            std::list<int> satisified_clauses_in_row = std::list<int>();
-            for(auto clause: variables[var.first].clauses) {
-                int result;
-                if(var.first == abs(get_head(clause))) {
-                    result = find_new_head(formula[clause], head_tail[clause], clause);
-                } else {
-                    result = find_new_tail(formula[clause], head_tail[clause], clause);
-                }
-
-                if (result==-1) { // Clause satisfied
-                    satisified_clauses_in_row.push_back(clause);
-                } else if (result==-2) {
-                    // DO something, clause can not be satisfied
-                    //std::cout << "result: -2" << '\n';
-                    return false;
-                }
-            }
-            for(auto clause: satisified_clauses_in_row) {
-                prepare_satisfied_clause(clause);
-            }
-        }
-        return true;
-    }
-
-    bool is_satisfied() {
-        return satisified_clauses.size() == formula.size();
-    }
-    int get_clause_size(int hash) {
-        return head_tail[hash].second - head_tail[hash].first + 1;
-    }
-};
-
-
-std::unordered_map<int, std::vector<int>> SATinstance::formula = std::unordered_map<int, std::vector<int>>();
-
-int find_next_variable(std::unordered_map<int, Variable>& variables) {
-    for(auto i: variables) {
-        if(i.second.value == -1) {
-            return i.first;
-        }
-    }
-    return -1;
-}
-
-double count_heuristic(SATinstance& new_instance) {
-    double coef[] = {1,1,1,0.2,0.05,0.01,0.003,0};
-    double res = 0;
-    for(auto clause_hash: new_instance.reducted_clauses) {
-        double clause_value = coef[std::min(new_instance.get_clause_size(clause_hash), 7)];
-        res += clause_value;
-    }
-    return res;
-}
-
-long double get_WBH_or_BSH_count(SATinstance& start_instance, SATinstance& new_instance) {
-    auto new_satisfied_clauses = std::unordered_set<int>();
-    std::set_difference(new_instance.satisified_clauses.begin(), new_instance.satisified_clauses.end(),
-        start_instance.satisified_clauses.begin(), start_instance.satisified_clauses.end(), 
-        std::inserter(new_satisfied_clauses, new_satisfied_clauses.begin()));
-    for(auto clause_hash: new_satisfied_clauses) {
-        auto size = start_instance.get_clause_size(clause_hash);
-        for(auto var: new_instance.formula[clause_hash]) {
-            new_instance.weights[var] -= powers[size-3];
-            
-        }
-    }
-
-    for(auto clause_hash: new_instance.reducted_clauses) {
-        int new_size = new_instance.get_clause_size(clause_hash);
-        int old_size = start_instance.get_clause_size(clause_hash);
-
-        for(auto var: new_instance.formula[clause_hash]) {
-            new_instance.weights[var] = new_instance.weights[var] - powers[old_size-3] + powers[new_size-3];
-        }
-    }
-    long double result = 0;
-    
-    #if DIFF_HEURISTIC == 3 
-        // For backbone search normalized heuristic
-        long double bsrh_coeff = 0.0;
-        int total_size = 0;
-        for(auto clause_hash: new_instance.reducted_clauses) {
-            total_size += new_instance.get_clause_size(clause_hash);
-            for(auto var: new_instance.formula[clause_hash]) {
-                bsrh_coeff += new_instance.weights[-1*var];
-            }
-        }
-        bsrh_coeff /= total_size;
-
-        for(auto clause_hash: new_instance.reducted_clauses) {
-            long double clause_result = powers[new_instance.get_clause_size(clause_hash) - 3];
-            for(auto var: new_instance.formula[clause_hash]) {
-                clause_result = clause_result * new_instance.weights[-1*var] / bsrh_coeff;
-            }
-        }
-
-    #else 
-        for(auto clause: new_instance.reducted_clauses) {
-            if(new_instance.get_clause_size(clause)==2) {
-                auto head = new_instance.get_head(clause);
-                auto tail = new_instance.get_tail(clause);
-                result += new_instance.weights[-1*head] + new_instance.weights[-1*tail]; 
-            }
-        }
-    #endif
-    return result;
-}
-
-double WBH_or_BSH_heuristic(SATinstance& start_instance, 
-        SATinstance& true_instance, SATinstance& false_instance, double& true_size, double& false_size) {
-        true_size = get_WBH_or_BSH_count(start_instance, true_instance);
-        false_size = get_WBH_or_BSH_count(start_instance, false_instance);
-    return true_size*false_size;
-}
-
-double decision_heuristic(SATinstance& start_instance, SATinstance& true_instance, SATinstance& false_instance, double& true_size, double& false_size) {
-        true_size = count_heuristic(true_instance);
-        false_size = count_heuristic(false_instance);
-    return true_size*false_size;
-}
+#include "sat_class.h"
+#include "diff_heuristics.h"
 
 
 int look_ahead(SATinstance& instance, double& true_size, double& false_size) {
@@ -391,7 +13,7 @@ int look_ahead(SATinstance& instance, double& true_size, double& false_size) {
     #else
     auto preselect = instance.preselect_cra();
     #endif
-    double decision_heuristic_result = -100;
+    double decision_heuristic_result = -100; // - infinity
     int selected_var = -1;
 
     double new_true_size, new_false_size;
@@ -408,7 +30,7 @@ int look_ahead(SATinstance& instance, double& true_size, double& false_size) {
             double new_heuristic_result = WBH_or_BSH_heuristic(instance, result_of_true_instance,
                                                              result_of_false_instance, new_true_size, new_false_size);
             #else 
-            double new_heuristic_result = decision_heuristic(instance, result_of_true_instance,
+            double new_heuristic_result = count_heuristic(instance, result_of_true_instance,
                                                              result_of_false_instance, new_true_size, new_false_size);
             #endif
 
@@ -470,7 +92,6 @@ bool dpll(SATinstance instance) {
             return true;
         } else {
             propagarion_res = instance_copy.propagation(var, second_propagation);
-            //std::cout << "var: " << var << " value: 1 is " << propagarion_res << '\n'; 
             return propagarion_res &&  dpll(instance_copy);
         }
     }
@@ -478,16 +99,13 @@ bool dpll(SATinstance instance) {
 
 int main() {
 
-    //std::ifstream in("/home/olga/licencjat/input/hole10.cnf");
-    //std::cin.rdbuf(in.rdbuf());
-
     auto formula = std::unordered_map<int, std::vector<int>>();
     auto satisified_clauses = std::unordered_set<int>();
     auto head_tail = std::unordered_map<int, std::pair<int, int>>();
     // Name of variable, variable.
     auto variables = std::unordered_map<int, Variable>();
     auto unasigned_variables = std::unordered_set<int>();
-    auto weights = std::unordered_map<int, long double>();
+    auto weights = std::unordered_map<int, double>();
     auto variable_count = std::unordered_map<int, int>();
     read_input(formula, variables, head_tail, unasigned_variables, weights, variable_count);
 
