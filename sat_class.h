@@ -11,8 +11,11 @@ public:
     std::stack<std::pair<int, int>> assigned_variables;
     std::unordered_set<int> unsigned_varialbes;
     std::unordered_set<int> reducted_clauses;
+    std::unordered_set<int> newly_created_binary_clauses;
     std::unordered_map<int, double> weights;
     std::unordered_map<int, int> variable_count;
+    double trigger;
+    double start_tigger;
     int decision_level;
     static std::unordered_map<int, std::vector<int>> formula;
     SATinstance(std::unordered_set<int> satisified_clauses,
@@ -175,6 +178,9 @@ public:
             is_head ? head_tail_pair.first = index : head_tail_pair.second = index;
             variables[variable].clauses.insert(clause_hash);
             reducted_clauses.insert(clause_hash);
+            if(get_clause_size(clause_hash)==2) {
+                newly_created_binary_clauses.insert(clause_hash); 
+            }
             // Add to list of that tail, remove from list of current
             return abs(literal);
         }
@@ -231,6 +237,9 @@ public:
         if(reducted_clauses.find(clause) != reducted_clauses.end()) {
             reducted_clauses.erase(clause);
         }
+        if(newly_created_binary_clauses.find(clause) != newly_created_binary_clauses.end()) {
+            newly_created_binary_clauses.erase(clause);
+        }
         variables[abs(head_tail_pair.first)].clauses.erase(clause);
         variables[abs(head_tail_pair.second)].clauses.erase(clause);
         #if DECISION_HEURISTIC == 0 || DECISION_HEURISTIC == 2
@@ -242,6 +251,7 @@ public:
 
     bool propagation(int varaible, int new_value) {
         reducted_clauses = std::unordered_set<int>();
+        newly_created_binary_clauses = {};
         assigned_variables = std::stack<std::pair<int, int>>();
         assigned_variables.push(std::make_pair(varaible, new_value));
         while (!assigned_variables.empty())

@@ -6,6 +6,30 @@
 #include "sat_class.h"
 #include "diff_heuristics.h"
 
+int look_ahead(SATinstance& instance, double& true_size, double& false_size);
+
+int double_lookahead(SATinstance& instance, SATinstance& start_instance) {
+    #if DOUBLE_LOOKAHEAD >= 1
+        double true_size = 0;
+        double false_size = 0;
+        auto binary_clauses = instance.newly_created_binary_clauses.size();
+        if(binary_clauses >= start_instance.trigger) {
+            auto next_look_ahed_result = look_ahead(instance, true_size, false_size);
+            if (next_look_ahed_result == 0) {
+                #if DOUBLE_LOOKAHEAD == 3
+                    start_instance.trigger = start_instance.start_tigger;
+                #endif
+                return 0;
+            } else {
+                #if DOUBLE_LOOKAHEAD == 3 || DOUBLE_LOOKAHEAD == 4
+                    start_instance.trigger = binary_clauses;
+                #endif
+            }
+        }
+    #endif
+    return 1;
+}
+
 
 int look_ahead(SATinstance& instance, double& true_size, double& false_size) {
     #if PRESELECT_HEURISTIC == 0
@@ -38,28 +62,58 @@ int look_ahead(SATinstance& instance, double& true_size, double& false_size) {
 
             if (!true_result && !false_result) {
                 return 0;
-            } else if (!true_result) {
-                instance = result_of_false_instance;
-            } else if (!false_result) {
-                instance = result_of_true_instance;
             } else {
-                #if DIFF_HEURISTIC != 0
-                double new_heuristic_result = WBH_or_BSH_heuristic(instance, result_of_true_instance,
-                                                                result_of_false_instance, new_true_size, new_false_size);
-                #else 
-                double new_heuristic_result = count_heuristic(instance, result_of_true_instance,
-                                                                result_of_false_instance, new_true_size, new_false_size);
-                #endif
+                if (!true_result) {
+                    instance = result_of_false_instance;
+                    #if DOUBLE_LOOKAHEAD > 0
+                        auto new_look_ahead_result = double_lookahead(instance, instance);
+                        if (new_look_ahead_result == 0) {
+                            return 0;
+                        }
+                    #endif
 
-                if (decision_heuristic_result < new_heuristic_result) {
-                    true_size =  new_true_size;
-                    false_size = new_false_size;
-                    decision_heuristic_result = new_heuristic_result;
-                    selected_var = i;
+                } else if (!false_result) {
+                    instance = result_of_true_instance;
+                    #if DOUBLE_LOOKAHEAD > 0
+                        auto new_look_ahead_result = double_lookahead(instance, instance);
+                        if (new_look_ahead_result == 0) {
+                            return 0;
+                        }
+                    #endif
+                } else {
+
+                    #if DOUBLE_LOOKAHEAD > 0
+                        auto double_for_true = double_lookahead(result_of_true_instance, instance);
+                        auto double_for_false = double_lookahead(result_of_false_instance, instance);
+                        if(double_for_true == 0 && double_for_false == 0) {
+                            return 0;
+                        }
+                    #endif
+
+                    #if DIFF_HEURISTIC != 0
+                    double new_heuristic_result = WBH_or_BSH_heuristic(instance, result_of_true_instance,
+                                                                    result_of_false_instance, new_true_size, new_false_size);
+                    #else 
+                    double new_heuristic_result = count_heuristic(instance, result_of_true_instance,
+                                                                    result_of_false_instance, new_true_size, new_false_size);
+                    #endif
+
+                    if (decision_heuristic_result < new_heuristic_result) {
+                        true_size =  new_true_size;
+                        false_size = new_false_size;
+                        decision_heuristic_result = new_heuristic_result;
+                        selected_var = i;
+                    }
                 }
             }
         }
     }
+
+    #if DOUBLE_LOOKAHEAD == 4
+        if(instance.trigger > 0) {
+            instance.trigger--;
+        }
+    #endif
     if(instance.variables[selected_var].value != -1) {
         return -1;
     }
@@ -74,6 +128,7 @@ bool dpll(SATinstance instance) {
     double true_size = 0;
     double false_size = 0;
     int var = look_ahead(instance, true_size, false_size);
+
     if(var == 0) {
         return false;
     } else if(var == -1) {
@@ -123,6 +178,16 @@ int main() {
 
     SATinstance::formula = formula;
     SATinstance problem = SATinstance(satisified_clauses, weights, variable_count, head_tail, unasigned_variables, variables, 0);
+
+    #if DOUBLE_LOOKAHEAD == 1
+        problem.trigger = 65;
+    #elif DOUBLE_LOOKAHEAD == 2 || DOUBLE_LOOKAHEAD == 3
+        problem.trigger = 0.17*problem.variables.size();
+        problem.start_tigger = 0.17*problem.variables.size();
+    #elif DOUBLE_LOOKAHEAD == 4
+        problem.trigger = 0;
+    #endif
+    
 
     auto res = dpll(problem);
     std::cout << "Result: " << res << '\n';

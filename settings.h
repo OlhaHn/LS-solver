@@ -48,3 +48,17 @@
 */
 
 #endif
+
+
+#ifndef DOUBLE_LOOKAHEAD
+#define DOUBLE_LOOKAHEAD 0
+/*
+    possible values: 
+        0 don't use double lookahead
+        1 use double look ahead with trigger = 65
+        2 use double look ahead with trigger = 0.17 * n
+        3 use dynamic look ahead with trigger on start 0.17*n, reduced after each unsuccessfull double look-ahead
+        4 use dynamic look ahead with trigger on start 0, updated after each unsuccessfull double look-ahead, reduced slightly after each look-ahead
+*/
+
+#endif
