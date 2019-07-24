@@ -6,7 +6,7 @@
 #include "sat_class.h"
 #include "diff_heuristics.h"
 
-int look_ahead(SATinstance& instance, double& true_size, double& false_size);
+int look_ahead(SATinstance& instance, double& true_size, double& false_size, int depth);
 
 int double_lookahead(SATinstance& instance, SATinstance& start_instance) {
     #if DOUBLE_LOOKAHEAD >= 1
@@ -14,7 +14,7 @@ int double_lookahead(SATinstance& instance, SATinstance& start_instance) {
         double false_size = 0;
         auto binary_clauses = instance.newly_created_binary_clauses.size();
         if(binary_clauses >= start_instance.trigger) {
-            auto next_look_ahed_result = look_ahead(instance, true_size, false_size);
+            auto next_look_ahed_result = look_ahead(instance, true_size, false_size, 2);
             if (next_look_ahed_result == 0) {
                 #if DOUBLE_LOOKAHEAD == 3
                     start_instance.trigger = start_instance.start_tigger;
@@ -31,7 +31,7 @@ int double_lookahead(SATinstance& instance, SATinstance& start_instance) {
 }
 
 
-int look_ahead(SATinstance& instance, double& true_size, double& false_size) {
+int look_ahead(SATinstance& instance, double& true_size, double& false_size, int depth) {
     #if PRESELECT_HEURISTIC == 0
     auto preselect = instance.preselect_propz();
     #else
@@ -66,27 +66,33 @@ int look_ahead(SATinstance& instance, double& true_size, double& false_size) {
                 if (!true_result) {
                     instance = result_of_false_instance;
                     #if DOUBLE_LOOKAHEAD > 0
-                        auto new_look_ahead_result = double_lookahead(instance, instance);
-                        if (new_look_ahead_result == 0) {
-                            return 0;
+                        if(depth == 0) {
+                            auto new_look_ahead_result = double_lookahead(instance, instance);
+                            if (new_look_ahead_result == 0) {
+                                return 0;
+                            }
                         }
                     #endif
 
                 } else if (!false_result) {
                     instance = result_of_true_instance;
                     #if DOUBLE_LOOKAHEAD > 0
-                        auto new_look_ahead_result = double_lookahead(instance, instance);
-                        if (new_look_ahead_result == 0) {
-                            return 0;
+                        if(depth == 0) { 
+                            auto new_look_ahead_result = double_lookahead(instance, instance);
+                            if (new_look_ahead_result == 0) {
+                                return 0;
+                            }
                         }
                     #endif
                 } else {
 
                     #if DOUBLE_LOOKAHEAD > 0
-                        auto double_for_true = double_lookahead(result_of_true_instance, instance);
-                        auto double_for_false = double_lookahead(result_of_false_instance, instance);
-                        if(double_for_true == 0 && double_for_false == 0) {
-                            return 0;
+                        if(depth == 0) {
+                            auto double_for_true = double_lookahead(result_of_true_instance, instance);
+                            auto double_for_false = double_lookahead(result_of_false_instance, instance);
+                            if(double_for_true == 0 && double_for_false == 0) {
+                                return 0;
+                            }
                         }
                     #endif
 
@@ -127,7 +133,7 @@ bool dpll(SATinstance instance) {
     }
     double true_size = 0;
     double false_size = 0;
-    int var = look_ahead(instance, true_size, false_size);
+    int var = look_ahead(instance, true_size, false_size, 0);
 
     if(var == 0) {
         return false;

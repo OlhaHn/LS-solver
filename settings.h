@@ -17,7 +17,7 @@
 #endif // DIFF_HEURISTIC
 
 #ifndef DECISION_HEURISTIC
-#define DECISION_HEURISTIC 2
+#define DECISION_HEURISTIC 0
 
 /*
     Possible values: 
@@ -39,7 +39,7 @@
 #endif // PRESELECT_HEURISTIC
 
 #ifndef AUTARKY_REASONING
-#define AUTARKY_REASONING 1
+#define AUTARKY_REASONING 0
 
 /*
     Possible values: 
@@ -51,7 +51,7 @@
 
 
 #ifndef DOUBLE_LOOKAHEAD
-#define DOUBLE_LOOKAHEAD 0
+#define DOUBLE_LOOKAHEAD 4
 /*
     possible values: 
         0 don't use double lookahead

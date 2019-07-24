@@ -35,6 +35,8 @@ public:
         unsigned_varialbes = p2.unsigned_varialbes;
         weights = p2.weights;
         variable_count = p2.variable_count;
+        trigger = p2.trigger;
+        start_tigger =p2.start_tigger;
     }
 
     // Copy assignment operator
@@ -47,6 +49,8 @@ public:
         unsigned_varialbes = p2.unsigned_varialbes;
         weights = p2.weights;
         variable_count = p2.variable_count;
+        trigger = p2.trigger;
+        start_tigger =p2.start_tigger;
         return *this;
     }
 
