@@ -194,7 +194,9 @@ int main() {
         problem.trigger = 0;
     #endif
     
-
-    auto res = dpll(problem);
-    std::cout << "Result: " << res << '\n';
+    auto start = std::clock();
+    auto result = dpll(problem);
+    auto duration = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
+    std::cout << duration << ';';
+    //std::cout << "Result: " << result << " " << "duration " << duration  << '\n';
 }

@@ -13,5 +13,7 @@
 #include <stack>
 #include <fstream>
 #include <future>
+#include <cstdio>
+#include <ctime>
 
 #endif
