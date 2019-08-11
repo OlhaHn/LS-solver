@@ -55,10 +55,8 @@ int look_ahead(SATinstance& instance, double& true_size, double& false_size, int
 
             auto result_of_true_instance = instance;
             auto result_of_false_instance = instance;
-            auto res1 = std::async(&SATinstance::propagation, &result_of_true_instance, i, 1);
-            auto res2 = std::async(&SATinstance::propagation, &result_of_false_instance, i, 0);
-            bool true_result = res1.get();
-            bool false_result = res2.get();
+            bool true_result = result_of_true_instance.propagation(i, 1);
+            bool false_result = result_of_false_instance.propagation(i, 0);
 
             if (!true_result && !false_result) {
                 return 0;
